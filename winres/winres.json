@@ -1,0 +1,61 @@
+{
+  "RT_GROUP_ICON": {
+    "APP": {
+      "0000": [
+        "icon.png",
+        "icon16.png"
+      ]
+    }
+  },
+  "RT_MANIFEST": {
+    "#1": {
+      "0409": {
+        "identity": {
+          "name": "DiagnostikVPN",
+          "version": "2.2.0.0"
+        },
+        "description": "DiagnostikVPN - Диагностика VPN соединений",
+        "minimum-os": "win7",
+        "execution-level": "as invoker",
+        "ui-access": false,
+        "auto-elevate": false,
+        "dpi-awareness": "system",
+        "disable-theming": false,
+        "disable-window-filtering": false,
+        "high-resolution-scrolling-aware": false,
+        "ultra-high-resolution-scrolling-aware": false,
+        "long-path-aware": false,
+        "printer-driver-isolation": false,
+        "gdi-scaling": false,
+        "segment-heap": false,
+        "use-common-controls-v6": false
+      }
+    }
+  },
+  "RT_VERSION": {
+    "#1": {
+      "0000": {
+        "fixed": {
+          "file_version": "2.2.0.0",
+          "product_version": "2.2.0.0"
+        },
+        "info": {
+          "0409": {
+            "Comments": "",
+            "CompanyName": "NeoVPN",
+            "FileDescription": "DiagnostikVPN - VPN Diagnostics Tool",
+            "FileVersion": "2.2.0",
+            "InternalName": "diagnostikvpn",
+            "LegalCopyright": "",
+            "LegalTrademarks": "",
+            "OriginalFilename": "diagnostikvpn.exe",
+            "PrivateBuild": "",
+            "ProductName": "DiagnostikVPN",
+            "ProductVersion": "2.2.0",
+            "SpecialBuild": ""
+          }
+        }
+      }
+    }
+  }
+}
