@@ -26,7 +26,9 @@ jobs:
         run: go-winres make
 
       - name: Build exe
-        run: go build -ldflags="-s -w" -o diagnostikvpn.exe .
+        env:
+          CGO_ENABLED: 0
+        run: go build -trimpath -buildmode=exe -ldflags="-s -w -extldflags '-static'" -o diagnostikvpn.exe .
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
