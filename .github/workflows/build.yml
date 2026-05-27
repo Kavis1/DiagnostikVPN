@@ -5,13 +5,36 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v3.6.0). Leave empty to only build artifacts without release.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: windows
+            goarch: amd64
+            artifact: diagnostikvpn-windows-amd64.exe
+            need_winres: true
+          - goos: darwin
+            goarch: amd64
+            artifact: diagnostikvpn-macos-amd64
+            need_winres: false
+          - goos: darwin
+            goarch: arm64
+            artifact: diagnostikvpn-macos-arm64
+            need_winres: false
+
+    runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -21,18 +44,46 @@ jobs:
           go-version: '1.21'
 
       - name: Install go-winres
+        if: matrix.need_winres
         run: go install github.com/tc-hib/go-winres@latest
 
       - name: Generate Windows resources (icon)
+        if: matrix.need_winres
         run: go-winres make
 
-      - name: Build exe
+      - name: Build
         env:
           CGO_ENABLED: 0
-        run: go build -trimpath -buildmode=exe -ldflags="-s -w -extldflags '-static'" -o diagnostikvpn.exe .
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build -trimpath \
+            -ldflags="-s -w" \
+            -o ${{ matrix.artifact }} .
 
-      - name: Create Release
+      - name: Upload artifact (workflow_dispatch без тега)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.tag == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+      - name: Determine release tag
+        id: tag
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '')
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create / Update Release
+        if: steps.tag.outputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
-          files: diagnostikvpn.exe
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          files: ${{ matrix.artifact }}
           generate_release_notes: true
+          fail_on_unmatched_files: true

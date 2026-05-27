@@ -12,10 +12,9 @@ import (
 // HWID для запросов к подпискам, которые ограничивают по устройствам.
 //
 // Формируется как SHA-256 от:
-//   1) MachineGuid (HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid) — стабилен
-//      пока ОС не переустановят. Это тот же ID, который Windows использует
-//      для своих device-привязок.
-//   2) MAC первого физического интерфейса — на случай если MachineGuid недоступен.
+//   1) Системный device-ID (MachineGuid на Windows, IOPlatformUUID на macOS) —
+//      стабилен пока ОС не переустановят.
+//   2) MAC первого физического интерфейса — на случай если ID недоступен.
 //
 // Возвращаемая строка — hex 64 символа. Стабильна между запусками программы
 // на одной и той же машине.
@@ -29,17 +28,15 @@ func getStableHWID() string {
 	hwidOnce.Do(func() {
 		h := sha256.New()
 
-		mguid := readMachineGUID()
-		if mguid != "" {
-			h.Write([]byte(mguid))
+		if id := readSystemMachineID(); id != "" {
+			h.Write([]byte(id))
 		}
 
 		if mac := firstPhysicalMAC(); mac != "" {
 			h.Write([]byte(mac))
 		}
 
-		// Фоллбэк — hostname (если ни MachineGuid ни MAC недоступны, всё равно
-		// получим что-то детерминированное на этой машине).
+		// Фоллбэк — hostname
 		hostname, _ := exec.Command("hostname").Output()
 		h.Write(hostname)
 
@@ -48,28 +45,9 @@ func getStableHWID() string {
 	return hwidValue
 }
 
-// readMachineGUID — стабильный device-ID Windows.
-func readMachineGUID() string {
-	out, err := exec.Command("reg", "query",
-		`HKLM\SOFTWARE\Microsoft\Cryptography`, "/v", "MachineGuid").CombinedOutput()
-	if err != nil {
-		return ""
-	}
-	text := decodeConsoleOutput(out)
-	for _, line := range strings.Split(text, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.Contains(line, "MachineGuid") && strings.Contains(line, "REG_SZ") {
-			parts := strings.Fields(line)
-			if len(parts) >= 3 {
-				return parts[len(parts)-1]
-			}
-		}
-	}
-	return ""
-}
-
 // firstPhysicalMAC возвращает MAC первого "настоящего" сетевого интерфейса
-// (не loopback, не виртуальный VPN-адаптер).
+// (не loopback, не виртуальный VPN-адаптер). Эта функция кросс-платформенна
+// потому что net.Interfaces() работает одинаково на Win/macOS/Linux.
 func firstPhysicalMAC() string {
 	ifaces, err := net.Interfaces()
 	if err != nil {
@@ -82,12 +60,14 @@ func firstPhysicalMAC() string {
 		if len(ifc.HardwareAddr) == 0 {
 			continue
 		}
-		// Скипаем VPN/виртуальные адаптеры
 		nl := strings.ToLower(ifc.Name)
+		// Виртуальные / VPN на любой платформе
 		if strings.Contains(nl, "tun") || strings.Contains(nl, "tap") ||
 			strings.Contains(nl, "wintun") || strings.Contains(nl, "wireguard") ||
 			strings.Contains(nl, "virtual") || strings.Contains(nl, "hyper-v") ||
-			strings.Contains(nl, "vmware") || strings.Contains(nl, "vbox") {
+			strings.Contains(nl, "vmware") || strings.Contains(nl, "vbox") ||
+			strings.HasPrefix(nl, "utun") || strings.HasPrefix(nl, "awdl") ||
+			strings.HasPrefix(nl, "bridge") || strings.HasPrefix(nl, "llw") {
 			continue
 		}
 		return ifc.HardwareAddr.String()
@@ -95,7 +75,7 @@ func firstPhysicalMAC() string {
 	return ""
 }
 
-// shortHWID — первые 32 символа hash'а, удобно для логов / Subscription-Userinfo-like headers.
+// shortHWID — первые 32 символа hash'а, удобно для логов / отображения пользователю.
 func shortHWID() string {
 	full := getStableHWID()
 	if len(full) > 32 {

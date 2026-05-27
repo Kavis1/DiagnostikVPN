@@ -35,17 +35,10 @@ type SingBoxTUN struct {
 	stderr     *bytes.Buffer
 }
 
-// isRunningAsAdmin проверяет — запущена ли наша программа от Администратора.
-// Без админа TUN inbound в sing-box не поднимется (нужны права на создание
-// сетевого адаптера и установку маршрутов).
-func isRunningAsAdmin() bool {
-	out, err := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
-		`[bool]([Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)`).Output()
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(string(out)) == "True"
-}
+// isRunningAsAdmin реализуется per-OS:
+//   • Windows — через PowerShell WindowsBuiltInRole (test_tun_windows.go)
+//   • macOS   — через os.Geteuid() == 0 (test_tun_darwin.go)
+// Без админ/root прав TUN inbound в sing-box не поднимется.
 
 // runTestTUN поднимает свой sing-box с TUN inbound на указанном VPN-конфиге,
 // измеряет смену IP, докладывает результат пользователю.
@@ -229,8 +222,8 @@ func (t *SingBoxTUN) Stop() {
 	if t.configPath != "" {
 		os.Remove(t.configPath)
 	}
-	// Дополнительно — taskkill для уверенности (на случай если sing-box зависнет)
-	exec.Command("taskkill", "/F", "/IM", "sing-box.exe").Run()
+	// Дополнительно — kill для уверенности (если sing-box завис)
+	killProcessByName("sing-box" + binaryExt())
 }
 
 // nodeDisplayName — короткое имя ключа для логов и отчёта.

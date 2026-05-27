@@ -8,7 +8,8 @@ import (
 	"strings"
 )
 
-const hostsFilePath = `C:\Windows\System32\drivers\etc\hosts`
+// hostsFilePath — определена в platform_windows.go (`C:\Windows\System32\drivers\etc\hosts`)
+// и platform_darwin.go (`/etc/hosts`).
 
 // checkHostsFile анализирует hosts-файл на предмет:
 //   - нестандартных записей кроме localhost

@@ -6,9 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
-	"unsafe"
 )
 
 const (
@@ -37,16 +35,6 @@ type TestResult struct {
 	Message string
 	Details string
 	Latency time.Duration
-}
-
-func enableWindowsColors() {
-	kernel32 := syscall.NewLazyDLL("kernel32.dll")
-	setConsoleMode := kernel32.NewProc("SetConsoleMode")
-	getConsoleMode := kernel32.NewProc("GetConsoleMode")
-	handle, _ := syscall.GetStdHandle(syscall.STD_OUTPUT_HANDLE)
-	var mode uint32
-	getConsoleMode.Call(uintptr(handle), uintptr(unsafe.Pointer(&mode)))
-	setConsoleMode.Call(uintptr(handle), uintptr(mode|0x0004))
 }
 
 func statusIcon(s TestStatus) string {

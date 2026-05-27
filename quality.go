@@ -28,7 +28,7 @@ type QualityMetrics struct {
 // measurePacketLoss делает расширенный ping (20 пакетов) до VPN-сервера и парсит summary.
 // Для Windows-ping разбирает обе локализации (en/ru).
 func measurePacketLoss(host string) QualityMetrics {
-	cmd := exec.Command("ping", "-n", "20", "-w", "2000", host)
+	cmd := exec.Command("ping", pingArgs(20, 2000, false, 0, host)...)
 	out, _ := cmd.CombinedOutput()
 	output := decodeConsoleOutput(out)
 

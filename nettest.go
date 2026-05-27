@@ -79,7 +79,7 @@ func testDNSResolve(host string) TestResult {
 
 func testPing(host string) TestResult {
 	start := time.Now()
-	out, err := exec.Command("ping", "-n", "4", "-w", "2000", host).CombinedOutput()
+	out, err := exec.Command("ping", pingArgs(4, 2000, false, 0, host)...).CombinedOutput()
 	elapsed := time.Since(start)
 	output := string(out)
 
@@ -191,7 +191,7 @@ func testMTU(host string) TestResult {
 
 	for low <= high {
 		mid := (low + high) / 2
-		out, err := exec.Command("ping", "-n", "1", "-f", "-l", strconv.Itoa(mid), "-w", "2000", host).CombinedOutput()
+		out, err := exec.Command("ping", pingArgs(1, 2000, true, mid, host)...).CombinedOutput()
 		output := string(out)
 
 		if err == nil && (strings.Contains(output, "TTL=") || strings.Contains(output, "ttl=")) {
@@ -231,14 +231,14 @@ func testTraceroute(host string) TestResult {
 	defer cancel()
 
 	start := time.Now()
-	// chcp 65001 для корректного вывода кириллицы (OEM codepage → UTF-8)
-	cmdStr := fmt.Sprintf("chcp 65001 >nul 2>&1 & tracert -d -w 1000 -h 15 %s", host)
-	out, err := exec.CommandContext(ctx, "cmd", "/c", cmdStr).CombinedOutput()
+	name, args := tracerouteCmd(host)
+	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
 	elapsed := time.Since(start)
-	output := string(out)
+	output := decodeConsoleOutput(out)
 
 	if err != nil && !strings.Contains(output, "Trace") && !strings.Contains(output, "Трассировка") &&
-		!strings.Contains(output, "over") && !strings.Contains(output, "route") {
+		!strings.Contains(output, "over") && !strings.Contains(output, "route") &&
+		!strings.Contains(output, "traceroute") {
 		if ctx.Err() != nil {
 			return TestResult{
 				Name:    "Маршрут (traceroute)",

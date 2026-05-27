@@ -115,12 +115,9 @@ func checkDNSLeakPotential() TestResult {
 }
 
 func getSystemDNSServers() []string {
-	// Дёшево — переиспользуем уже существующий extractDNSFromIPConfig.
-	out, err := runWindowsCmd("ipconfig", "/all")
-	if err != nil {
-		return nil
-	}
-	return extractDNSFromIPConfig(out)
+	// Платформенная реализация (см. sysdns_*.go) — на Windows читает
+	// ipconfig /all, на macOS — scutil --dns.
+	return platformSystemDNS()
 }
 
 func joinStrs(s []string) string {

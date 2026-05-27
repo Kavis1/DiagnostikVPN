@@ -29,17 +29,23 @@ type XrayProxy struct {
 
 const (
 	xrayVersion = "26.3.27"
-	// GitHub release asset URL
-	xrayZipURL = "https://github.com/XTLS/Xray-core/releases/download/v" + xrayVersion +
-		"/Xray-windows-64.zip"
-	xrayDir = "xray-bin"
+	xrayDir     = "xray-bin"
 )
 
-// locateXrayCore ищет xray.exe в типичных местах.
+func xrayDownloadURL() string {
+	asset := xrayAssetName()
+	if asset == "" {
+		return ""
+	}
+	return "https://github.com/XTLS/Xray-core/releases/download/v" + xrayVersion + "/" + asset
+}
+
+// locateXrayCore ищет xray бинарник в типичных местах (с учётом OS-расширения).
 func locateXrayCore() string {
+	exe := "xray" + binaryExt()
 	candidates := []string{
-		filepath.Join(xrayDir, "xray.exe"),
-		"xray.exe",
+		filepath.Join(xrayDir, exe),
+		exe,
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
@@ -47,25 +53,27 @@ func locateXrayCore() string {
 			return abs
 		}
 	}
-	if p, err := exec.LookPath("xray.exe"); err == nil {
-		return p
-	}
-	if p, err := exec.LookPath("xray"); err == nil {
+	if p, err := exec.LookPath(exe); err == nil {
 		return p
 	}
 	return ""
 }
 
-// downloadXrayCore тянет ZIP с GitHub и распаковывает xray.exe в ./xray-bin/.
+// downloadXrayCore тянет ZIP с GitHub и распаковывает xray бинарник в ./xray-bin/.
+// Xray-core релизы — ВСЕГДА ZIP (включая macOS), в отличие от sing-box.
 func downloadXrayCore() (string, error) {
 	if err := os.MkdirAll(xrayDir, 0o755); err != nil {
 		return "", err
 	}
+	url := xrayDownloadURL()
+	if url == "" {
+		return "", fmt.Errorf("неподдерживаемая платформа для xray-core")
+	}
 	zipPath := filepath.Join(xrayDir, "xray.zip")
 
 	client := &http.Client{Timeout: 180 * time.Second}
-	req, _ := http.NewRequest("GET", xrayZipURL, nil)
-	req.Header.Set("User-Agent", "DiagnostikVPN/3.3")
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("User-Agent", "DiagnostikVPN/3.5")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -92,36 +100,44 @@ func downloadXrayCore() (string, error) {
 	}
 	defer r.Close()
 
-	// В ZIP'е лежат xray.exe + geo*.dat (нужны для роутинга — пусть будут рядом).
+	// В ZIP'е лежат xray бинарник + geo*.dat (нужны для роутинга).
+	targetExe := "xray" + binaryExt()
 	var xrayExePath string
 	for _, f := range r.File {
 		baseName := filepath.Base(f.Name)
-		if strings.HasSuffix(strings.ToLower(baseName), ".exe") ||
-			strings.HasSuffix(strings.ToLower(baseName), ".dat") {
-			dst := filepath.Join(xrayDir, baseName)
-			outFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
-			if err != nil {
-				return "", err
-			}
-			rc, err := f.Open()
-			if err != nil {
-				outFile.Close()
-				return "", err
-			}
-			if _, err := io.Copy(outFile, rc); err != nil {
-				outFile.Close()
-				rc.Close()
-				return "", err
-			}
+		lower := strings.ToLower(baseName)
+		isXrayBin := strings.EqualFold(baseName, targetExe) || lower == "xray"
+		isGeoDat := strings.HasSuffix(lower, ".dat")
+		if !isXrayBin && !isGeoDat {
+			continue
+		}
+		dstName := baseName
+		if isXrayBin {
+			dstName = targetExe
+		}
+		dst := filepath.Join(xrayDir, dstName)
+		outFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
+		if err != nil {
+			return "", err
+		}
+		rc, err := f.Open()
+		if err != nil {
+			outFile.Close()
+			return "", err
+		}
+		if _, err := io.Copy(outFile, rc); err != nil {
 			outFile.Close()
 			rc.Close()
-			if strings.EqualFold(baseName, "xray.exe") {
-				xrayExePath, _ = filepath.Abs(dst)
-			}
+			return "", err
+		}
+		outFile.Close()
+		rc.Close()
+		if isXrayBin {
+			xrayExePath, _ = filepath.Abs(dst)
 		}
 	}
 	if xrayExePath == "" {
-		return "", fmt.Errorf("xray.exe не найден в архиве")
+		return "", fmt.Errorf("xray бинарник не найден в архиве")
 	}
 	return xrayExePath, nil
 }

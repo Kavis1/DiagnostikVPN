@@ -1,8 +1,10 @@
 package main
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,17 +35,24 @@ type SingBoxProxy struct {
 
 const (
 	singBoxVersion = "1.13.9"
-	singBoxZipURL  = "https://github.com/SagerNet/sing-box/releases/download/v" + singBoxVersion +
-		"/sing-box-" + singBoxVersion + "-windows-amd64.zip"
-	singBoxDir = "sing-box-bin"
+	singBoxDir     = "sing-box-bin"
 )
 
-// locateSingBox ищет sing-box.exe в нескольких типичных местах.
+// singBoxDownloadURL формирует URL под текущую ОС/архитектуру.
+func singBoxDownloadURL() string {
+	return "https://github.com/SagerNet/sing-box/releases/download/v" + singBoxVersion +
+		"/sing-box-" + singBoxVersion + "-" + singBoxAssetSuffix()
+}
+
+// locateSingBox ищет sing-box бинарник в нескольких типичных местах.
+// На Windows ищет .exe, на macOS/Linux без расширения.
 func locateSingBox() string {
+	exe := "sing-box" + binaryExt()
 	candidates := []string{
-		filepath.Join(singBoxDir, "sing-box.exe"),
-		filepath.Join(singBoxDir, "sing-box-"+singBoxVersion+"-windows-amd64", "sing-box.exe"),
-		"sing-box.exe",
+		filepath.Join(singBoxDir, exe),
+		filepath.Join(singBoxDir, "sing-box-"+singBoxVersion+"-"+strings.TrimSuffix(singBoxAssetSuffix(), ".zip"), exe),
+		filepath.Join(singBoxDir, "sing-box-"+singBoxVersion+"-"+strings.TrimSuffix(singBoxAssetSuffix(), ".tar.gz"), exe),
+		exe,
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
@@ -51,25 +60,34 @@ func locateSingBox() string {
 			return abs
 		}
 	}
-	if p, err := exec.LookPath("sing-box.exe"); err == nil {
-		return p
-	}
-	if p, err := exec.LookPath("sing-box"); err == nil {
+	if p, err := exec.LookPath(exe); err == nil {
 		return p
 	}
 	return ""
 }
 
-// downloadSingBox тянет ZIP с GitHub и распаковывает sing-box.exe в ./sing-box-bin/.
+// downloadSingBox тянет архив (zip на Windows / tar.gz на macOS+Linux) с GitHub
+// и распаковывает sing-box бинарник в ./sing-box-bin/.
 func downloadSingBox() (string, error) {
 	if err := os.MkdirAll(singBoxDir, 0o755); err != nil {
 		return "", err
 	}
-	zipPath := filepath.Join(singBoxDir, "sing-box.zip")
+	url := singBoxDownloadURL()
+	if url == "" {
+		return "", fmt.Errorf("неподдерживаемая платформа для sing-box: %s", singBoxAssetSuffix())
+	}
+
+	isZip := strings.HasSuffix(url, ".zip")
+	var archivePath string
+	if isZip {
+		archivePath = filepath.Join(singBoxDir, "sing-box.zip")
+	} else {
+		archivePath = filepath.Join(singBoxDir, "sing-box.tar.gz")
+	}
 
 	client := &http.Client{Timeout: 120 * time.Second}
-	req, _ := http.NewRequest("GET", singBoxZipURL, nil)
-	req.Header.Set("User-Agent", "DiagnostikVPN/3.2")
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("User-Agent", "DiagnostikVPN/3.5")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -80,7 +98,7 @@ func downloadSingBox() (string, error) {
 		return "", fmt.Errorf("HTTP %d при скачивании sing-box", resp.StatusCode)
 	}
 
-	out, err := os.Create(zipPath)
+	out, err := os.Create(archivePath)
 	if err != nil {
 		return "", err
 	}
@@ -90,16 +108,23 @@ func downloadSingBox() (string, error) {
 	}
 	out.Close()
 
-	// Распаковка
-	r, err := zip.OpenReader(zipPath)
+	exeName := "sing-box" + binaryExt()
+	if isZip {
+		return extractFromZip(archivePath, singBoxDir, exeName)
+	}
+	return extractFromTarGz(archivePath, singBoxDir, exeName)
+}
+
+// extractFromZip извлекает указанный файл (по basename) в dest dir.
+func extractFromZip(archivePath, dest, fileName string) (string, error) {
+	r, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return "", err
 	}
 	defer r.Close()
-
 	for _, f := range r.File {
-		if strings.HasSuffix(strings.ToLower(f.Name), "sing-box.exe") {
-			dst := filepath.Join(singBoxDir, "sing-box.exe")
+		if strings.HasSuffix(strings.ToLower(f.Name), strings.ToLower(fileName)) {
+			dst := filepath.Join(dest, fileName)
 			outFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
 			if err != nil {
 				return "", err
@@ -120,7 +145,51 @@ func downloadSingBox() (string, error) {
 			return abs, nil
 		}
 	}
-	return "", fmt.Errorf("sing-box.exe не найден в архиве")
+	return "", fmt.Errorf("%s не найден в архиве", fileName)
+}
+
+// extractFromTarGz извлекает указанный файл (по basename) в dest dir.
+func extractFromTarGz(archivePath, dest, fileName string) (string, error) {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return "", err
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
+			continue
+		}
+		if !strings.HasSuffix(strings.ToLower(hdr.Name), strings.ToLower(fileName)) {
+			continue
+		}
+		dst := filepath.Join(dest, fileName)
+		outFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
+		if err != nil {
+			return "", err
+		}
+		if _, err := io.Copy(outFile, tr); err != nil {
+			outFile.Close()
+			return "", err
+		}
+		outFile.Close()
+		abs, _ := filepath.Abs(dst)
+		return abs, nil
+	}
+	return "", fmt.Errorf("%s не найден в архиве", fileName)
 }
 
 // newSingBoxProxy запускает sing-box для одного VPN-конфига.

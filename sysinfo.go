@@ -26,12 +26,24 @@ func testOSInfo() TestResult {
 	hostname, _ := os.Hostname()
 	info := fmt.Sprintf("%s/%s, хост: %s", runtime.GOOS, runtime.GOARCH, hostname)
 
-	out, err := exec.Command("cmd", "/c", "ver").Output()
-	if err == nil {
-		ver := strings.TrimSpace(string(out))
-		if ver != "" {
-			info = fmt.Sprintf("%s, %s", info, ver)
+	// Версия ОС:
+	//   Windows: cmd /c ver
+	//   macOS:   sw_vers -productVersion + -buildVersion
+	var ver string
+	switch runtime.GOOS {
+	case "windows":
+		out, err := exec.Command("cmd", "/c", "ver").Output()
+		if err == nil {
+			ver = strings.TrimSpace(string(out))
 		}
+	case "darwin":
+		prod, _ := exec.Command("sw_vers", "-productVersion").Output()
+		build, _ := exec.Command("sw_vers", "-buildVersion").Output()
+		ver = fmt.Sprintf("macOS %s (%s)",
+			strings.TrimSpace(string(prod)), strings.TrimSpace(string(build)))
+	}
+	if ver != "" {
+		info = fmt.Sprintf("%s, %s", info, ver)
 	}
 
 	return TestResult{
@@ -86,44 +98,14 @@ func testNetworkInterfaces() TestResult {
 }
 
 func testDNSServers() TestResult {
-	// Try ipconfig /all to find DNS servers (works on all Windows)
-	out, err := exec.Command("ipconfig", "/all").CombinedOutput()
-	if err == nil {
-		servers := extractDNSFromIPConfig(string(out))
-		if len(servers) > 0 {
-			return TestResult{
-				Name:    "DNS серверы",
-				Status:  StatusOK,
-				Message: strings.Join(servers, ", "),
-			}
+	servers := platformSystemDNS()
+	if len(servers) > 0 {
+		return TestResult{
+			Name:    "DNS серверы",
+			Status:  StatusOK,
+			Message: strings.Join(servers, ", "),
 		}
 	}
-
-	// Fallback: nslookup
-	out2, err2 := exec.Command("nslookup", "localhost").CombinedOutput()
-	if err2 == nil {
-		lines := strings.Split(string(out2), "\n")
-		for i, line := range lines {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "Server:") || strings.HasPrefix(line, "Default Server:") {
-				// Next line has Address
-				if i+1 < len(lines) {
-					addrLine := strings.TrimSpace(lines[i+1])
-					if strings.HasPrefix(addrLine, "Address:") {
-						addr := strings.TrimSpace(strings.SplitN(addrLine, ":", 2)[1])
-						if addr != "" {
-							return TestResult{
-								Name:    "DNS серверы",
-								Status:  StatusOK,
-								Message: addr,
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
 	return TestResult{
 		Name:    "DNS серверы",
 		Status:  StatusWarning,
@@ -172,6 +154,35 @@ func isIPAddress(s string) bool {
 }
 
 func testDefaultGateway() TestResult {
+	if runtime.GOOS == "darwin" {
+		out, err := exec.Command("route", "-n", "get", "default").CombinedOutput()
+		if err != nil {
+			return TestResult{
+				Name:    "Шлюз по умолчанию",
+				Status:  StatusWarning,
+				Message: "не удалось определить",
+			}
+		}
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "gateway:") {
+				gw := strings.TrimSpace(strings.TrimPrefix(line, "gateway:"))
+				if net.ParseIP(gw) != nil {
+					return TestResult{
+						Name:    "Шлюз по умолчанию",
+						Status:  StatusOK,
+						Message: gw,
+					}
+				}
+			}
+		}
+		return TestResult{
+			Name:    "Шлюз по умолчанию",
+			Status:  StatusWarning,
+			Message: "не найден",
+		}
+	}
+
 	out, err := exec.Command("cmd", "/c", "route", "print", "0.0.0.0").CombinedOutput()
 	if err != nil {
 		return TestResult{
