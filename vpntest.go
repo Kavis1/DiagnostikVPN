@@ -11,6 +11,17 @@ import (
 	"time"
 )
 
+// handshakeProbeTarget — целевой хост к которому VPN-сервер пытается проксировать
+// нашу проверочную HTTP-запрос внутри VLESS/Trojan handshake. Здесь мы НЕ тестим
+// "работает ли google.com", мы тестим что сервер вообще принимает наш handshake
+// и готов открыть TCP-туннель куда-либо.
+// google.com выбран потому что: (1) почти везде доступен, (2) отдаёт быстрый HTTP-ответ,
+// (3) не блокируется по геолокации серверов выхода.
+const (
+	handshakeProbeTarget = "www.google.com"
+	handshakeProbePort   = uint16(80)
+)
+
 func runVPNTests(cfg *VPNConfig) []TestResult {
 	var results []TestResult
 
@@ -107,8 +118,8 @@ func testVLESSConnection(cfg *VPNConfig) TestResult {
 		}
 	}
 
-	targetDomain := "www.google.com"
-	targetPort := uint16(80)
+	targetDomain := handshakeProbeTarget
+	targetPort := handshakeProbePort
 
 	var header []byte
 	header = append(header, 0) // version 0
@@ -138,7 +149,7 @@ func testVLESSConnection(cfg *VPNConfig) TestResult {
 	header = append(header, []byte(targetDomain)...)
 
 	// Payload: HTTP request to test proxy
-	httpReq := []byte("GET / HTTP/1.1\r\nHost: www.google.com\r\nConnection: close\r\n\r\n")
+	httpReq := []byte("GET / HTTP/1.1\r\nHost: " + handshakeProbeTarget + "\r\nConnection: close\r\n\r\n")
 	header = append(header, httpReq...)
 
 	conn.SetDeadline(time.Now().Add(10 * time.Second))
@@ -289,8 +300,8 @@ func testTrojanConnection(cfg *VPNConfig) TestResult {
 	hash := sha256.Sum224([]byte(cfg.Password))
 	hexHash := hex.EncodeToString(hash[:])
 
-	targetDomain := "www.google.com"
-	targetPort := uint16(80)
+	targetDomain := handshakeProbeTarget
+	targetPort := handshakeProbePort
 
 	var header []byte
 	header = append(header, []byte(hexHash)...) // 56 bytes hex
@@ -306,7 +317,7 @@ func testTrojanConnection(cfg *VPNConfig) TestResult {
 	header = append(header, 0x0d, 0x0a) // CRLF
 
 	// HTTP request as payload
-	httpReq := []byte("GET / HTTP/1.1\r\nHost: www.google.com\r\nConnection: close\r\n\r\n")
+	httpReq := []byte("GET / HTTP/1.1\r\nHost: " + handshakeProbeTarget + "\r\nConnection: close\r\n\r\n")
 	header = append(header, httpReq...)
 
 	conn.SetDeadline(time.Now().Add(10 * time.Second))

@@ -1,3 +1,16 @@
 *.exe
 diagnostik_report.txt
 rsrc_windows_*.syso
+
+# Backend бинарники, скачиваются автоматически программой при запуске
+sing-box-bin/
+xray-bin/
+zapret-winws/
+zapret/
+
+# Прочие артефакты запуска
+*.log
+diag-singbox-*.json
+diag-singbox-manual-*.json
+diag-xray-*.json
+diag-xray-manual-*.json

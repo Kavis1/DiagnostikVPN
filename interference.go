@@ -86,8 +86,17 @@ func runInterferenceTests() []TestResult {
 	results = append(results, checkVPNClient(processList))
 	results = append(results, checkCommercialVPNs(processList))
 	results = append(results, checkFirewallStatus())
+	results = append(results, checkOutboundBlockRules())
+	results = append(results, checkAppRestrictions())
 	results = append(results, checkSystemProxy())
 	results = append(results, checkVPNAdapters())
+
+	// Антивирусы (отдельная секция)
+	results = append(results, runAntivirusChecks(processList)...)
+
+	// DNS leak потенциал + IPv6
+	results = append(results, checkDNSLeakPotential())
+	results = append(results, checkIPv6Connectivity())
 
 	return results
 }
