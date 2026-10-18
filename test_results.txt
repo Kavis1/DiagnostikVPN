@@ -1,0 +1,17 @@
+=== SYSTEM INFO ===
+Python Version: 3.12.13 (main, Mar  6 2026, 16:37:31) [GCC 13.3.0]
+Total RAM: 7.77 GB
+Disk Space Total: 97.87 GB, Free: 92.83 GB
+
+=== TEST RESULTS ===
+test_disk_space (tests.test_environment.TestEnvironment.test_disk_space)
+Check available disk space is >= 5GB. ... ok
+test_python_version (tests.test_environment.TestEnvironment.test_python_version)
+Check Python version is >= 3.10. ... ok
+test_ram (tests.test_environment.TestEnvironment.test_ram)
+Check total RAM is >= 2GB. ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.000s
+
+OK
