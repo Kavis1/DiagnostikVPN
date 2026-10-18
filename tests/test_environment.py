@@ -1,4 +1,5 @@
 import os
+import platform
 import shutil
 import sys
 import unittest
@@ -31,6 +32,32 @@ class TestEnvironment(unittest.TestCase):
             free_gb,
             5.0,
             f"Free disk space ({free_gb:.2f} GB) is less than required 5 GB",
+        )
+
+    def test_platform_system(self):
+        """Check system OS is Linux."""
+        self.assertEqual(
+            platform.system(),
+            "Linux",
+            f"Expected OS Linux, got {platform.system()}",
+        )
+
+    def test_platform_machine(self):
+        """Check CPU architecture is x86_64 or aarch64."""
+        machine = platform.machine()
+        self.assertIn(
+            machine,
+            ["x86_64", "aarch64"],
+            f"Unsupported architecture {machine}",
+        )
+
+    def test_cpu_count(self):
+        """Check CPU count is at least 2."""
+        count = os.cpu_count() or 0
+        self.assertGreaterEqual(
+            count,
+            2,
+            f"CPU count {count} is less than required 2",
         )
 
 

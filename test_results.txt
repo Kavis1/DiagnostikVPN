@@ -1,17 +1,27 @@
 === SYSTEM INFO ===
 Python Version: 3.12.13 (main, Mar  6 2026, 16:37:31) [GCC 13.3.0]
+Platform: Linux-6.8.0-x86_64-with-glibc2.39
+OS System: Linux
+Machine: x86_64
+CPU Count: 4
 Total RAM: 7.77 GB
 Disk Space Total: 97.87 GB, Free: 92.83 GB
 
 === TEST RESULTS ===
+test_cpu_count (tests.test_environment.TestEnvironment.test_cpu_count)
+Check CPU count is at least 2. ... ok
 test_disk_space (tests.test_environment.TestEnvironment.test_disk_space)
 Check available disk space is >= 5GB. ... ok
+test_platform_machine (tests.test_environment.TestEnvironment.test_platform_machine)
+Check CPU architecture is x86_64 or aarch64. ... ok
+test_platform_system (tests.test_environment.TestEnvironment.test_platform_system)
+Check system OS is Linux. ... ok
 test_python_version (tests.test_environment.TestEnvironment.test_python_version)
 Check Python version is >= 3.10. ... ok
 test_ram (tests.test_environment.TestEnvironment.test_ram)
 Check total RAM is >= 2GB. ... ok
 
 ----------------------------------------------------------------------
-Ran 3 tests in 0.000s
+Ran 6 tests in 0.001s
 
 OK
